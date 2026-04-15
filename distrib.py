@@ -5,17 +5,41 @@ import io
 import csv
 import random
 import os
+from collections import Counter
 
+# --- BOT SETUP ---
 intents = discord.Intents.default()
 intents.message_content = True 
+intents.members = True # Useful for checking roles/permissions
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f'BALAGBAG is online as {bot.user}')
+    print(f'BALAGBAG PRO is online as {bot.user}')
     await bot.tree.sync()
 
-@bot.tree.command(name="distribute", description="30x30 Random Congrats and Roast Combo")
+# --- PERMISSION CHECK ---
+def is_guild_staff():
+    """Checks if the user is the Owner, or has Moderator/Elder roles."""
+    async def predicate(interaction: discord.Interaction):
+        # 1. Check if Owner
+        if interaction.user.id == interaction.guild.owner_id:
+            return True
+        
+        # 2. Check for specific roles (Case-insensitive)
+        staff_roles = ["Moderator", "Elder", "Admin"] # Add more role names here
+        user_role_names = [role.name for role in interaction.user.roles]
+        
+        if any(role_name in staff_roles for role_name in user_role_names):
+            return True
+        
+        await interaction.response.send_message("❌ **Access Denied.** Only the Owner, Moderators, or Elders can run this.", ephemeral=True)
+        return False
+    return app_commands.check(predicate)
+
+@bot.tree.command(name="distribute", description="Staff-only loot distribution with 30x30 variety")
+@is_guild_staff()
 async def distribute(interaction: discord.Interaction, file: discord.Attachment):
     await interaction.response.defer()
 
@@ -41,7 +65,7 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
                 except: pass
 
         if not all_names or not prize_rules:
-            return await interaction.followup.send("❌ Check your CSV! Column A: Names, B: Item, C: Count.")
+            return await interaction.followup.send("❌ CSV Error: Column A needs names, B needs items, C needs counts.")
 
         pool = all_names.copy()
         winners_dict = {}
@@ -54,16 +78,22 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
                 winners_dict[winner].append(item)
                 pool.remove(winner)
 
-        # --- 1. THE TABLE ---
+        # --- 1. THE TABLE (WITH ITEM STACKING) ---
         table = "### 📦 BALAGBAG Distribution Results\n"
         table += "```\n+----------------+-----------------------------------+\n"
         table += "| Winner         | Item Won                          |\n"
         table += "+----------------+-----------------------------------+\n"
+        
         for player, items in winners_dict.items():
-            item_str = ", ".join(items)
+            # STACKING LOGIC: Counts "Chest, Chest" and makes it "2x Chest"
+            counts = Counter(items)
+            stacked_items = [f"{qty}x {name}" if qty > 1 else name for name, qty in counts.items()]
+            item_str = ", ".join(stacked_items)
+            
             p_disp = (player[:14] + "..") if len(player) > 14 else player
             i_disp = (item_str[:32] + "...") if len(item_str) > 32 else item_str
             table += f"| {p_disp:<14} | {i_disp:<33} |\n"
+        
         table += "+----------------+-----------------------------------+```\n"
 
         # --- 2. 30 RANDOM ANNOUNCEMENTS ---
@@ -106,7 +136,7 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             "**{u}**, the universe said 'No.' Lead loser among {n} people. 📉",
             "**{u}**, delete the game. You're just a background character. 💀",
             "RNGesus hates **{u}** specifically. Luck dry as a desert. 🌵",
-            "Imagine being **{u}** and getting nothing while everyone eats. 🚮",
+            "Imagine being **{u}** and getting nothing while everyone else eats. 🚮",
             "{n} failed, but **{u}** failed the hardest. Better luck in the next life. ⚰️",
             "Winners celebrate while **{u}** reconsiders all life choices. 🧠",
             "If luck was a sport, **{u}** would be a gold medalist in losing. 🎪",
@@ -142,10 +172,16 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
         chosen_roast = random.choice(roasts).format(u=unlucky, n=loser_count)
 
         final_content = f"{table}\n{chosen_announcement}\n\n🔔 @everyone\n> {chosen_roast}"
-
         await interaction.followup.send(final_content)
 
     except Exception as e:
         await interaction.followup.send(f"❌ Error: {e}")
+
+# Error handler for Permissions
+@distribute.error
+async def distribute_error(interaction: discord.Interaction, error: app_commands.AppCommandError):
+    if isinstance(error, app_commands.CheckFailure):
+        # This message already sent in the predicate, but good to have a backup
+        pass
 
 bot.run(os.getenv('DISCORD_TOKEN'))
