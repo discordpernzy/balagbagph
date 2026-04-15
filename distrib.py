@@ -4,10 +4,13 @@ from discord.ext import commands
 import io
 import csv
 import random
-import os  # <--- Added this to talk to Railway
+import os
 
 # --- BOT SETUP ---
+# Standard intents + Message Content intent to fix the warning in your logs
 intents = discord.Intents.default()
+intents.message_content = True 
+
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
@@ -17,7 +20,7 @@ async def on_ready():
         synced = await bot.tree.sync()
         print(f"Synced {len(synced)} command(s)")
     except Exception as e:
-        print(e)
+        print(f"Failed to sync commands: {e}")
 
 # --- THE COMMAND ---
 @bot.tree.command(name="distribute", description="Upload a CSV: Col 1 = Names, Col 2 = Items")
@@ -57,8 +60,13 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             await interaction.followup.send(embed=embed)
 
     except Exception as e:
-        await interaction.followup.send(f"❌ Error: {e}")
+        await interaction.followup.send(f"❌ Error processing CSV: {e}")
 
-# --- RAILWAY TOKEN START ---
-# This looks for a "Variable" named DISCORD_TOKEN in Railway's settings
-bot.run(os.getenv('DISCORD_TOKEN'))
+# --- STARTUP LOGIC ---
+TOKEN = os.getenv('DISCORD_TOKEN')
+
+if TOKEN:
+    bot.run(TOKEN)
+else:
+    print("❌ ERROR: 'DISCORD_TOKEN' not found in environment variables.")
+    print("Go to Railway -> Project -> Variables and add DISCORD_TOKEN there.")
