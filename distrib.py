@@ -10,18 +10,16 @@ from collections import Counter
 # --- BOT SETUP ---
 intents = discord.Intents.default()
 intents.message_content = True 
-# Set to True if you enabled it in Portal, False if not. 
-# If Choice A from before, set to False.
 intents.members = True 
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f'BALAGBAG is online. Multi-drop enabled.')
+    print(f'BALAGBAG PRO is online. List mode enabled.')
     await bot.tree.sync()
 
-@bot.tree.command(name="distribute", description="Allows one person to win multiple items")
+@bot.tree.command(name="distribute", description="Shows full list of items without cutting them off")
 async def distribute(interaction: discord.Interaction, file: discord.Attachment):
     await interaction.response.defer()
 
@@ -53,34 +51,26 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
 
         # --- MULTI-DROP LOGIC ---
         for item, count in prize_rules:
-            # We pick 'count' winners from the full list of names every time
-            # This allows one person to be picked for Item A and Item B
+            # Picks winners for every single item quantity
             selected_winners = random.choices(all_names, k=count)
-            
             for winner in selected_winners:
                 if winner not in winners_dict:
                     winners_dict[winner] = []
                 winners_dict[winner].append(item)
 
-        # --- TABLE WITH STACKING ---
-        table = "### 📦 BALAGBAG Distribution Results\n"
-        table += "```\n+----------------+-----------------------------------+\n"
-        table += "| Winner         | Item Won                          |\n"
-        table += "+----------------+-----------------------------------+\n"
+        # --- 1. NEW LIST FORMAT (No cutoff) ---
+        result_message = "### 📦 BALAGBAG Distribution Results\n"
         
         for player, items in winners_dict.items():
             counts = Counter(items)
-            # This turns ['Chest', 'Chest', 'Ring'] into "2x Chest, Ring"
+            # Formats as: "2x Chest, 1x Rune Ring"
             stacked_items = [f"{qty}x {name}" if qty > 1 else name for name, qty in counts.items()]
-            item_str = ", ".join(stacked_items)
+            item_list_str = ", ".join(stacked_items)
             
-            p_disp = (player[:14] + "..") if len(player) > 14 else player
-            i_disp = (item_str[:32] + "...") if len(item_str) > 32 else item_str
-            table += f"| {p_disp:<14} | {i_disp:<33} |\n"
-        
-        table += "+----------------+-----------------------------------+```\n"
+            # Adds each winner to the message
+            result_message += f"**{player}**:\n> {item_list_str}\n"
 
-        # --- RANDOM MESSAGES (30x30) ---
+        # --- 2. 30 RANDOM ANNOUNCEMENTS ---
         announcements = [
             "🎉 **Big wins today!** Your hard work is paying off. Keep participating!",
             "🏆 **Victory tastes sweet!** Let's maintain this energy and keep contributing!",
@@ -114,6 +104,7 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             "🔋 **Full energy!** Let's carry this hype into next week's events!"
         ]
 
+        # --- 3. 30 RANDOM ROASTS ---
         roasts = [
             "As for **{u}**, your luck is garbage. Go cry in a corner. 🤡",
             "**{u}**, the universe said 'No.' Imagine getting nothing. 📉",
@@ -147,13 +138,15 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             "Don't worry **{u}**, someone has to be at the bottom of the food chain. 🐟"
         ]
 
-        # Identify losers (names in Column A that didn't win anything)
+        # Loser logic
         all_winners = set(winners_dict.keys())
         losers = [n for n in all_names if n not in all_winners]
         unlucky = random.choice(losers) if losers else "the RNG"
 
-        final_content = f"{table}\n{random.choice(announcements)}\n\n🔔 @everyone\n> {random.choice(roasts).format(u=unlucky)}"
-        await interaction.followup.send(final_content)
+        # Assemble Final Message
+        final_msg = f"{result_message}\n{random.choice(announcements)}\n\n🔔 @everyone\n> {random.choice(roasts).format(u=unlucky)}"
+        
+        await interaction.followup.send(final_msg)
 
     except Exception as e:
         await interaction.followup.send(f"❌ Error: {e}")
