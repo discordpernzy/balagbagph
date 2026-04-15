@@ -140,7 +140,6 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             color=0x2f3136
         )
         embed.set_footer(text="Keep contributing to the guild family! 🛡️")
-        embed.set_timestamp()
 
         # Loser logic
         all_winners = set(winners_dict.keys())
