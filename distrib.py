@@ -17,13 +17,12 @@ async def on_ready():
     print(f'Logged in as {bot.user}')
     await bot.tree.sync()
 
-# Helper function to split the table into chunks
 def chunk_table(data_dict, chunk_size=20):
     it = iter(data_dict.items())
     for i in range(0, len(data_dict), chunk_size):
         yield {k: next(it)[1] for k in list(data_dict)[i:i + chunk_size]}
 
-@bot.tree.command(name="distribute", description="Handles large guilds (up to 50+ members)")
+@bot.tree.command(name="distribute", description="Distribute items and roast the losers")
 async def distribute(interaction: discord.Interaction, file: discord.Attachment):
     await interaction.response.defer()
 
@@ -44,36 +43,53 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
         random.shuffle(items)
         random.shuffle(players)
 
+        # Distribute
         dist = {p: [] for p in players}
         for i, item in enumerate(items):
             recipient = players[i % len(players)]
             dist[recipient].append(item)
 
-        # --- OUTPUT LOGIC FOR LARGE GROUPS ---
-        await interaction.followup.send(f"### 📦 BALAGBAG Distribution: {len(players)} Members Found")
+        # --- SEPARATE WINNERS AND LOSERS ---
+        winners = {p: loot for p, loot in dist.items() if loot}
+        losers = [p for p, loot in dist.items() if not loot]
 
-        # Split players into groups of 20 to avoid the 2000 character limit
-        for chunk in chunk_table(dist, chunk_size=20):
-            table = "```\n+----------------+--------------------------+\n"
-            table += "| Recipient      | Items                    |\n"
-            table += "+----------------+--------------------------+\n"
-            
-            for player, loot in chunk.items():
-                items_str = ", ".join(loot) if loot else "None"
-                p_disp = (player[:14] + "..") if len(player) > 14 else player
-                i_disp = (items_str[:22] + "...") if len(items_str) > 22 else items_str
-                table += f"| {p_disp:<14} | {i_disp:<24} |\n"
-            
-            table += "+----------------+--------------------------+```"
-            await interaction.followup.send(table)
+        await interaction.followup.send(f"### 📦 BALAGBAG Distribution: {len(winners)} Lucky Winners")
 
-        # Final Notification
-        final_notice = (
-            f"🔔 @everyone\n"
-            f"> **Formal Notice:** Distribution for all {len(players)} members is complete. "
-            f"Please verify your allocated items in the tables above."
-        )
-        await interaction.followup.send(final_notice)
+        # Only show the table for winners
+        if winners:
+            for chunk in chunk_table(winners, chunk_size=20):
+                table = "```\n+----------------+--------------------------+\n"
+                table += "| Winner         | Items Received           |\n"
+                table += "+----------------+--------------------------+\n"
+                
+                for player, loot in chunk.items():
+                    items_str = ", ".join(loot)
+                    p_disp = (player[:14] + "..") if len(player) > 14 else player
+                    i_disp = (items_str[:22] + "...") if len(items_str) > 22 else items_str
+                    table += f"| {p_disp:<14} | {i_disp:<24} |\n"
+                
+                table += "+----------------+--------------------------+```"
+                await interaction.followup.send(table)
+        else:
+            await interaction.followup.send("_No items were distributed._")
+
+        # --- THE SILLY ROAST MESSAGE ---
+        roast_message = "🔔 @everyone\n"
+        if losers:
+            # Join names with commas, or just mention the count if there are too many
+            if len(losers) > 10:
+                unlucky_text = f"{len(losers)} people (including {random.choice(losers)})"
+            else:
+                unlucky_text = ", ".join(losers)
+
+            roast_message += (
+                f"> **Loot Summary:** Congrats to the winners. \n"
+                f"> As for **{unlucky_text}**... your luck absolutely sucks. Better luck next time, losers! 🤡"
+            )
+        else:
+            roast_message += "> **Notice:** Everyone actually got something today. Must be a miracle."
+
+        await interaction.followup.send(roast_message)
 
     except Exception as e:
         await interaction.followup.send(f"❌ Error: {e}")
