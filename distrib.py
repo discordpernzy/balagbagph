@@ -15,7 +15,7 @@ async def on_ready():
     print(f'BALAGBAG is online as {bot.user}')
     await bot.tree.sync()
 
-@bot.tree.command(name="distribute", description="Pick winners and drop one of 15 random roasts")
+@bot.tree.command(name="distribute", description="Congratulate winners and roast losers")
 async def distribute(interaction: discord.Interaction, file: discord.Attachment):
     await interaction.response.defer()
 
@@ -41,7 +41,7 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
                 except: pass
 
         if not all_names or not prize_rules:
-            return await interaction.followup.send("❌ Check your CSV formatting!")
+            return await interaction.followup.send("❌ CSV Error: Check your names and prize counts!")
 
         pool = all_names.copy()
         winners_dict = {}
@@ -54,7 +54,7 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
                 winners_dict[winner].append(item)
                 pool.remove(winner)
 
-        # Output Table
+        # 1. Output the Table
         await interaction.followup.send(f"### 📦 BALAGBAG Distribution Results")
         table = "```\n+----------------+-----------------------------------+\n"
         table += "| Winner         | Item Won                          |\n"
@@ -67,32 +67,41 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
         table += "+----------------+-----------------------------------+```"
         await interaction.followup.send(table)
 
-        # --- THE 15 ROASTS ---
+        # 2. CONGRATULATIONS & ENCOURAGEMENT (The Professional Part)
+        congrats_msg = (
+            f"🎉 **Congratulations to all the winners listed above!**\n"
+            f"> Your hard work pays off. Let's keep this momentum going! "
+            f"Please continue to participate in events and contribute more to the guild so we can keep these rewards coming! ⚔️🛡️"
+        )
+        await interaction.followup.send(congrats_msg)
+
+        # 3. THE 15 ROASTS (The "Balagbag" Part)
         if pool:
             unlucky = random.choice(pool)
             loser_count = len(pool)
             
             roasts = [
-                f"> **Looting Over.** {loser_count} people got nothing. **{unlucky}**, your luck is absolute garbage. Go cry in a corner. 🤡",
-                f"> **Distribution Finalized.** **{unlucky}**, the universe specifically said 'No' to you today. Imagine being the lead loser. 📉",
-                f"> **Notice:** **{unlucky}**, delete the game. You and the other {loser_count} losers are just background characters. 💀",
-                f"> **Breaking News:** RNGesus hates **{unlucky}** specifically. Your luck is as dry as a desert. 🌵",
-                f"> **Summary:** Imagine being **{unlucky}** and getting nothing while everyone else eats. Uninstalling is free! 🚮",
-                f"> **Ouch:** {loser_count} people failed the roll, but **{unlucky}** failed the hardest. Better luck in the next life. ⚰️",
-                f"> **Status Report:** {winners_dict.keys().__len__()} people are celebrating. **{unlucky}** is currently reconsidering all life choices. 🧠",
-                f"> **RNG Alert:** If being unlucky was a sport, **{unlucky}** would be a gold medalist. Absolute clown behavior. 🎪",
-                f"> **Fact Check:** **{unlucky}** is the reason we can't have nice things. Imagine being part of the {loser_count} unlucky group. 🤷",
-                f"> **Warning:** Extreme salt detected coming from **{unlucky}**. Someone get this loser a tissue. 🧂",
-                f"> **System Update:** Loot distribution successful for everyone except **{unlucky}** and {loser_count-1} other nobodies. 👤",
-                f"> **Analysis:** **{unlucky}** has the RNG of a wet paper towel. Truly impressive failure. 🧻",
-                f"> **Correction:** We said 'Distribution,' but for **{unlucky}**, we meant 'Disappointment.' 😞",
-                f"> **Top Secret:** The bot was programmed to give **{unlucky}** nothing. It was personal. 🤖",
-                f"> **Final Word:** Congrats to the winners! To **{unlucky}**: Your contribution was mid and your luck is worse. 🤡"
+                f"**{unlucky}**, your luck is absolute garbage. Go cry in a corner. 🤡",
+                f"**{unlucky}**, the universe specifically said 'No' to you today. Imagine being the lead loser among {loser_count} people. 📉",
+                f"**{unlucky}**, delete the game. You and the other {loser_count} losers are just background characters. 💀",
+                f"RNGesus hates **{unlucky}** specifically. Your luck is as dry as a desert. 🌵",
+                f"Imagine being **{unlucky}** and getting nothing while everyone else eats. Uninstalling is free! 🚮",
+                f"{loser_count} people failed the roll, but **{unlucky}** failed the hardest. Better luck in the next life. ⚰️",
+                f"Winners are celebrating, while **{unlucky}** is currently reconsidering all life choices. 🧠",
+                f"If being unlucky was a sport, **{unlucky}** would be a gold medalist. Absolute clown behavior. 🎪",
+                f"**{unlucky}** is the reason we can't have nice things. Imagine being part of the {loser_count} unlucky group. 🤷",
+                f"Extreme salt detected coming from **{unlucky}**. Someone get this loser a tissue. 🧂",
+                f"Loot distribution successful for everyone except **{unlucky}** and {loser_count-1} other nobodies. 👤",
+                f"**{unlucky}** has the RNG of a wet paper towel. Truly impressive failure. 🧻",
+                f"We said 'Distribution,' but for **{unlucky}**, we meant 'Disappointment.' 😞",
+                f"The bot was programmed to give **{unlucky}** nothing. It was personal. 🤖",
+                f"To **{unlucky}**: Your contribution was mid and your luck is worse. Better luck next time! 🤡"
             ]
             
-            await interaction.followup.send(f"🔔 @everyone\n{random.choice(roasts)}")
+            # Send the roast as a follow-up
+            await interaction.followup.send(f"🔔 @everyone\n> {random.choice(roasts)}")
         else:
-            await interaction.followup.send("🔔 @everyone\n> Everyone won. My roasting sensors are bored. 🙄")
+            await interaction.followup.send("🔔 @everyone\n> No one to roast today. Everyone actually won something for once. 🙄")
 
     except Exception as e:
         await interaction.followup.send(f"❌ Error: {e}")
