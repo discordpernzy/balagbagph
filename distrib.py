@@ -19,7 +19,7 @@ async def on_ready():
     print(f'BALAGBAG FINAL is online.')
     await bot.tree.sync()
 
-@bot.tree.command(name="distribute", description="Top-level Ledger with Congrats & Roasts")
+@bot.tree.command(name="distribute", description="Fair Distribution: Everyone gets one before repeats")
 async def distribute(interaction: discord.Interaction, file: discord.Attachment):
     await interaction.response.defer()
 
@@ -36,26 +36,43 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
         for row in csv_reader:
             if not row: continue
             name = row[0].strip()
-            if name: all_names.append(name)
+            if name and name not in all_names: 
+                all_names.append(name)
+            
             if len(row) >= 3:
                 item = row[1].strip()
                 try:
                     count = int(row[2].strip())
-                    if item and count > 0: prize_rules.append((item, count))
+                    if item and count > 0: 
+                        prize_rules.append((item, count))
                 except: pass
 
         if not all_names:
-            return await interaction.followup.send("❌ No names found!")
+            return await interaction.followup.send("❌ No names found in the first column!")
 
+        # --- FAIR DISTRIBUTION LOGIC ---
         winners_dict = {}
+        
+        # Create a shuffled copy of the names to act as our queue
+        pool = list(all_names)
+        random.shuffle(pool)
+        pointer = 0
 
-        # --- DISTRIBUTION LOGIC ---
-        for item, count in prize_rules:
-            selected_winners = random.choices(all_names, k=count)
-            for winner in selected_winners:
+        for item, total_quantity in prize_rules:
+            for _ in range(total_quantity):
+                # If we've reached the end of the list, everyone has received an item.
+                # Shuffle again and restart the cycle for the next round of items.
+                if pointer >= len(pool):
+                    random.shuffle(pool)
+                    pointer = 0
+                
+                winner = pool[pointer]
+                
                 if winner not in winners_dict:
                     winners_dict[winner] = []
+                
                 winners_dict[winner].append(item)
+                pointer += 1
 
         # --- 30 CONGRATS ANNOUNCEMENTS ---
         announcements = [
@@ -141,14 +158,18 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
         )
         embed.set_footer(text="Keep contributing to the guild family! 🛡️")
 
-        # Loser logic
+        # Loser logic (only for those who literally got nothing)
         all_winners = set(winners_dict.keys())
         losers = [n for n in all_names if n not in all_winners]
-        unlucky = random.choice(losers) if losers else "the rest of you"
         
         # Send Results
         await interaction.followup.send(embed=embed)
-        await interaction.followup.send(f"🔔 @everyone\n> {random.choice(roasts).format(u=unlucky)}")
+        
+        if losers:
+            unlucky = random.choice(losers)
+            await interaction.followup.send(f"🔔 @everyone\n> {random.choice(roasts).format(u=unlucky)}")
+        else:
+            await interaction.followup.send("🔔 @everyone\n> Everyone got loot today. I'll find someone to roast next time. 🙄")
 
     except Exception as e:
         await interaction.followup.send(f"❌ Error: {e}")
