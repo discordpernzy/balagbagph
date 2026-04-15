@@ -7,7 +7,6 @@ import random
 import os
 
 # --- BOT SETUP ---
-# Standard intents + Message Content intent to fix the warning in your logs
 intents = discord.Intents.default()
 intents.message_content = True 
 
@@ -50,6 +49,7 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             recipient = players[i % len(players)]
             dist[recipient].append(item)
 
+        # 1. Send Individual Embeds
         for player, loot in dist.items():
             loot_text = "\n".join(loot) if loot else "No items"
             embed = discord.Embed(
@@ -58,6 +58,32 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
                 color=0x00ff88
             )
             await interaction.followup.send(embed=embed)
+
+        # 2. Create Summary Table
+        summary_table = "```\n+----------------+--------------------------+\n"
+        summary_table += "| Recipient      | Items Distributed        |\n"
+        summary_table += "+----------------+--------------------------+\n"
+        
+        for player, loot in dist.items():
+            items_str = ", ".join(loot) if loot else "None"
+            # Truncate if items list is too long for the table row
+            if len(items_str) > 24:
+                items_str = items_str[:21] + "..."
+            summary_table += f"| {player[:14]:<14} | {items_str:<24} |\n"
+            
+        summary_table += "+----------------+--------------------------+```"
+
+        # 3. Final Formal Message & @everyone
+        # Note: Mentioning @everyone requires the bot to have "Mention Everyone" permissions
+        final_message = (
+            f"**Distribution Complete**\n\n"
+            f"{summary_table}\n\n"
+            f"🔔 @everyone\n"
+            f"> **Notice:** The distribution process has concluded. All designated winners are formally requested "
+            f"to verify their allocated items and update the records accordingly."
+        )
+        
+        await interaction.followup.send(final_message)
 
     except Exception as e:
         await interaction.followup.send(f"❌ Error processing CSV: {e}")
@@ -69,4 +95,3 @@ if TOKEN:
     bot.run(TOKEN)
 else:
     print("❌ ERROR: 'DISCORD_TOKEN' not found in environment variables.")
-    print("Go to Railway -> Project -> Variables and add DISCORD_TOKEN there.")
