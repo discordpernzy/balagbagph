@@ -41,49 +41,43 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
         if not players or not items:
             return await interaction.followup.send("❌ CSV must have names in Col 1 and items in Col 2.")
 
+        # Randomize
         random.shuffle(items)
         random.shuffle(players)
 
+        # Distribute items
         dist = {p: [] for p in players}
         for i, item in enumerate(items):
             recipient = players[i % len(players)]
             dist[recipient].append(item)
 
-        # 1. Send Individual Embeds
-        for player, loot in dist.items():
-            loot_text = "\n".join(loot) if loot else "No items"
-            embed = discord.Embed(
-                title=f"🎒 {player}",
-                description=f"```{loot_text}```",
-                color=0x00ff88
-            )
-            await interaction.followup.send(embed=embed)
-
-        # 2. Create Summary Table
+        # --- GENERATE SUMMARY TABLE ---
+        # Using a code block to ensure monospace alignment
         summary_table = "```\n+----------------+--------------------------+\n"
         summary_table += "| Recipient      | Items Distributed        |\n"
         summary_table += "+----------------+--------------------------+\n"
         
         for player, loot in dist.items():
             items_str = ", ".join(loot) if loot else "None"
-            # Truncate if items list is too long for the table row
-            if len(items_str) > 24:
-                items_str = items_str[:21] + "..."
-            summary_table += f"| {player[:14]:<14} | {items_str:<24} |\n"
+            
+            # Clean formatting: Truncate player name and items for table fit
+            p_display = (player[:14] + "..") if len(player) > 14 else player
+            i_display = (items_str[:22] + "...") if len(items_str) > 22 else items_str
+            
+            summary_table += f"| {p_display:<14} | {i_display:<24} |\n"
             
         summary_table += "+----------------+--------------------------+```"
 
-        # 3. Final Formal Message & @everyone
-        # Note: Mentioning @everyone requires the bot to have "Mention Everyone" permissions
-        final_message = (
-            f"**Distribution Complete**\n\n"
+        # --- FINAL OUTPUT ---
+        final_announcement = (
+            f"### 📦 Loot Distribution Summary\n"
             f"{summary_table}\n\n"
             f"🔔 @everyone\n"
-            f"> **Notice:** The distribution process has concluded. All designated winners are formally requested "
-            f"to verify their allocated items and update the records accordingly."
+            f"> **Official Notice:** The automated distribution process has been completed successfully. "
+            f"All recipients are formally requested to review the allocation above and update the system records."
         )
         
-        await interaction.followup.send(final_message)
+        await interaction.followup.send(final_announcement)
 
     except Exception as e:
         await interaction.followup.send(f"❌ Error processing CSV: {e}")
@@ -94,4 +88,4 @@ TOKEN = os.getenv('DISCORD_TOKEN')
 if TOKEN:
     bot.run(TOKEN)
 else:
-    print("❌ ERROR: 'DISCORD_TOKEN' not found in environment variables.")
+    print("❌ ERROR: 'DISCORD_TOKEN' not found.")
