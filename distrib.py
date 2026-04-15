@@ -16,10 +16,10 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f'BALAGBAG PRO is online. List mode enabled.')
+    print(f'BALAGBAG FINAL is online.')
     await bot.tree.sync()
 
-@bot.tree.command(name="distribute", description="Shows full list of items without cutting them off")
+@bot.tree.command(name="distribute", description="Top-level Ledger with Congrats & Roasts")
 async def distribute(interaction: discord.Interaction, file: discord.Attachment):
     await interaction.response.defer()
 
@@ -45,32 +45,19 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
                 except: pass
 
         if not all_names:
-            return await interaction.followup.send("❌ No names found in Column A!")
+            return await interaction.followup.send("❌ No names found!")
 
         winners_dict = {}
 
-        # --- MULTI-DROP LOGIC ---
+        # --- DISTRIBUTION LOGIC ---
         for item, count in prize_rules:
-            # Picks winners for every single item quantity
             selected_winners = random.choices(all_names, k=count)
             for winner in selected_winners:
                 if winner not in winners_dict:
                     winners_dict[winner] = []
                 winners_dict[winner].append(item)
 
-        # --- 1. NEW LIST FORMAT (No cutoff) ---
-        result_message = "### 📦 BALAGBAG Distribution Results\n"
-        
-        for player, items in winners_dict.items():
-            counts = Counter(items)
-            # Formats as: "2x Chest, 1x Rune Ring"
-            stacked_items = [f"{qty}x {name}" if qty > 1 else name for name, qty in counts.items()]
-            item_list_str = ", ".join(stacked_items)
-            
-            # Adds each winner to the message
-            result_message += f"**{player}**:\n> {item_list_str}\n"
-
-        # --- 2. 30 RANDOM ANNOUNCEMENTS ---
+        # --- 30 CONGRATS ANNOUNCEMENTS ---
         announcements = [
             "🎉 **Big wins today!** Your hard work is paying off. Keep participating!",
             "🏆 **Victory tastes sweet!** Let's maintain this energy and keep contributing!",
@@ -104,7 +91,7 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             "🔋 **Full energy!** Let's carry this hype into next week's events!"
         ]
 
-        # --- 3. 30 RANDOM ROASTS ---
+        # --- 30 SAVAGE ROASTS ---
         roasts = [
             "As for **{u}**, your luck is garbage. Go cry in a corner. 🤡",
             "**{u}**, the universe said 'No.' Imagine getting nothing. 📉",
@@ -138,15 +125,31 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             "Don't worry **{u}**, someone has to be at the bottom of the food chain. 🐟"
         ]
 
+        # --- BUILDING THE LEDGER ---
+        ledger_text = ""
+        for player, items in winners_dict.items():
+            counts = Counter(items)
+            stacked_items = [f"{qty}x {name}" if qty > 1 else name for name, qty in counts.items()]
+            ledger_text += f"👤 **{player}**\n└ {', '.join(stacked_items)}\n\n"
+
+        # --- CREATE EMBED ---
+        chosen_congrats = random.choice(announcements)
+        embed = discord.Embed(
+            title="⚔️ Guild Distribution: Rewards Issued",
+            description=f"{chosen_congrats}\n\n{ledger_text}",
+            color=0x2f3136
+        )
+        embed.set_footer(text="Keep contributing to the guild family! 🛡️")
+        embed.set_timestamp()
+
         # Loser logic
         all_winners = set(winners_dict.keys())
         losers = [n for n in all_names if n not in all_winners]
-        unlucky = random.choice(losers) if losers else "the RNG"
-
-        # Assemble Final Message
-        final_msg = f"{result_message}\n{random.choice(announcements)}\n\n🔔 @everyone\n> {random.choice(roasts).format(u=unlucky)}"
+        unlucky = random.choice(losers) if losers else "the rest of you"
         
-        await interaction.followup.send(final_msg)
+        # Send Results
+        await interaction.followup.send(embed=embed)
+        await interaction.followup.send(f"🔔 @everyone\n> {random.choice(roasts).format(u=unlucky)}")
 
     except Exception as e:
         await interaction.followup.send(f"❌ Error: {e}")
