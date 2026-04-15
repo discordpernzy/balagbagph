@@ -14,15 +14,10 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f'Logged in as {bot.user}')
+    print(f'BALAGBAG is online as {bot.user}')
     await bot.tree.sync()
 
-def chunk_table(data_dict, chunk_size=20):
-    it = iter(data_dict.items())
-    for i in range(0, len(data_dict), chunk_size):
-        yield {k: next(it)[1] for k in list(data_dict)[i:i + chunk_size]}
-
-@bot.tree.command(name="distribute", description="Distribute items and roast the losers")
+@bot.tree.command(name="distribute", description="Pick X number of winners for each item from the list")
 async def distribute(interaction: discord.Interaction, file: discord.Attachment):
     await interaction.response.defer()
 
@@ -32,64 +27,79 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
     try:
         content = (await file.read()).decode('utf-8')
         csv_reader = csv.reader(io.StringIO(content))
-        raw_data = list(csv_reader)
         
-        players = sorted(list(set(row[0].strip() for row in raw_data if len(row) > 0 and row[0].strip())))
-        items = [row[1].strip() for row in raw_data if len(row) > 1 and row[1].strip()]
+        all_names = []
+        prize_rules = [] # List of (item_name, num_winners)
 
-        if not players or not items:
-            return await interaction.followup.send("❌ CSV data is empty or malformed.")
+        # 1. Parse the CSV
+        for row in csv_reader:
+            if not row: continue
+            
+            # Column A: Collect Names
+            name = row[0].strip()
+            if name:
+                all_names.append(name)
+            
+            # Column B & C: Collect Item and Number of Winners
+            if len(row) >= 3:
+                item_name = row[1].strip()
+                try:
+                    num_winners = int(row[2].strip())
+                    if item_name and num_winners > 0:
+                        prize_rules.append((item_name, num_winners))
+                except ValueError:
+                    pass # Skip if Column C is not a number
 
-        random.shuffle(items)
-        random.shuffle(players)
+        if not all_names or not prize_rules:
+            return await interaction.followup.send("❌ Error: Column A needs names, Column B needs items, and Column C needs a number!")
 
-        # Distribute
-        dist = {p: [] for p in players}
-        for i, item in enumerate(items):
-            recipient = players[i % len(players)]
-            dist[recipient].append(item)
+        # 2. Start the Lottery
+        pool = all_names.copy()
+        winners_dict = {} # {Name: [Items]}
 
-        # --- SEPARATE WINNERS AND LOSERS ---
-        winners = {p: loot for p, loot in dist.items() if loot}
-        losers = [p for p, loot in dist.items() if not loot]
+        for item, count in prize_rules:
+            # Pick 'count' number of people from whoever is left in the pool
+            if not pool:
+                break # Stop if we run out of people
+            
+            # random.sample handles picking multiple unique people at once
+            selected_winners = random.sample(pool, min(len(pool), count))
+            
+            for winner in selected_winners:
+                if winner not in winners_dict:
+                    winners_dict[winner] = []
+                winners_dict[winner].append(item)
+                # Remove from pool so they don't win multiple items in one session
+                pool.remove(winner)
 
-        await interaction.followup.send(f"### 📦 BALAGBAG Distribution: {len(winners)} Lucky Winners")
+        # 3. Output Table
+        await interaction.followup.send(f"### 📦 BALAGBAG Distribution Results")
+        
+        table = "```\n+----------------+-----------------------------------+\n"
+        table += "| Winner         | Item Won                          |\n"
+        table += "+----------------+-----------------------------------+\n"
+        
+        for player, items in winners_dict.items():
+            item_str = ", ".join(items)
+            p_disp = (player[:14] + "..") if len(player) > 14 else player
+            i_disp = (item_str[:32] + "...") if len(item_str) > 32 else item_str
+            table += f"| {p_disp:<14} | {i_disp:<33} |\n"
+        
+        table += "+----------------+-----------------------------------+```"
+        await interaction.followup.send(table)
 
-        # Only show the table for winners
-        if winners:
-            for chunk in chunk_table(winners, chunk_size=20):
-                table = "```\n+----------------+--------------------------+\n"
-                table += "| Winner         | Items Received           |\n"
-                table += "+----------------+--------------------------+\n"
-                
-                for player, loot in chunk.items():
-                    items_str = ", ".join(loot)
-                    p_disp = (player[:14] + "..") if len(player) > 14 else player
-                    i_disp = (items_str[:22] + "...") if len(items_str) > 22 else items_str
-                    table += f"| {p_disp:<14} | {i_disp:<24} |\n"
-                
-                table += "+----------------+--------------------------+```"
-                await interaction.followup.send(table)
-        else:
-            await interaction.followup.send("_No items were distributed._")
-
-        # --- THE SILLY ROAST MESSAGE ---
-        roast_message = "🔔 @everyone\n"
-        if losers:
-            # Join names with commas, or just mention the count if there are too many
-            if len(losers) > 10:
-                unlucky_text = f"{len(losers)} people (including {random.choice(losers)})"
-            else:
-                unlucky_text = ", ".join(losers)
-
-            roast_message += (
-                f"> **Loot Summary:** Congrats to the winners. \n"
-                f"> As for **{unlucky_text}**... your luck absolutely sucks. Better luck next time, losers! 🤡"
+        # 4. Final Roast Message
+        if pool:
+            unlucky_soul = random.choice(pool)
+            msg = (
+                f"🔔 @everyone\n"
+                f"> **Distribution Finalized.** {len(winners_dict)} winners picked.\n"
+                f"> For the **{len(pool)}** of you who got nothing—especially **{unlucky_soul}**...\n"
+                f"> Your luck is absolute garbage. Go cry in a corner. 🤡"
             )
+            await interaction.followup.send(msg)
         else:
-            roast_message += "> **Notice:** Everyone actually got something today. Must be a miracle."
-
-        await interaction.followup.send(roast_message)
+            await interaction.followup.send("🔔 @everyone\n> Everyone won something. This guild is too soft.")
 
     except Exception as e:
         await interaction.followup.send(f"❌ Error: {e}")
