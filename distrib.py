@@ -15,14 +15,15 @@ bot = commands.Bot(command_prefix="!", intents=intents)
 @bot.event
 async def on_ready():
     print(f'Logged in as {bot.user}')
-    try:
-        synced = await bot.tree.sync()
-        print(f"Synced {len(synced)} command(s)")
-    except Exception as e:
-        print(f"Failed to sync commands: {e}")
+    await bot.tree.sync()
 
-# --- THE COMMAND ---
-@bot.tree.command(name="distribute", description="Upload a CSV: Col 1 = Names, Col 2 = Items")
+# Helper function to split the table into chunks
+def chunk_table(data_dict, chunk_size=20):
+    it = iter(data_dict.items())
+    for i in range(0, len(data_dict), chunk_size):
+        yield {k: next(it)[1] for k in list(data_dict)[i:i + chunk_size]}
+
+@bot.tree.command(name="distribute", description="Handles large guilds (up to 50+ members)")
 async def distribute(interaction: discord.Interaction, file: discord.Attachment):
     await interaction.response.defer()
 
@@ -34,58 +35,47 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
         csv_reader = csv.reader(io.StringIO(content))
         raw_data = list(csv_reader)
         
-        # Extract and clean data
         players = sorted(list(set(row[0].strip() for row in raw_data if len(row) > 0 and row[0].strip())))
         items = [row[1].strip() for row in raw_data if len(row) > 1 and row[1].strip()]
 
         if not players or not items:
-            return await interaction.followup.send("❌ CSV must have names in Col 1 and items in Col 2.")
+            return await interaction.followup.send("❌ CSV data is empty or malformed.")
 
-        # Randomize
         random.shuffle(items)
         random.shuffle(players)
 
-        # Distribute items
         dist = {p: [] for p in players}
         for i, item in enumerate(items):
             recipient = players[i % len(players)]
             dist[recipient].append(item)
 
-        # --- GENERATE SUMMARY TABLE ---
-        # Using a code block to ensure monospace alignment
-        summary_table = "```\n+----------------+--------------------------+\n"
-        summary_table += "| Recipient      | Items Distributed        |\n"
-        summary_table += "+----------------+--------------------------+\n"
-        
-        for player, loot in dist.items():
-            items_str = ", ".join(loot) if loot else "None"
-            
-            # Clean formatting: Truncate player name and items for table fit
-            p_display = (player[:14] + "..") if len(player) > 14 else player
-            i_display = (items_str[:22] + "...") if len(items_str) > 22 else items_str
-            
-            summary_table += f"| {p_display:<14} | {i_display:<24} |\n"
-            
-        summary_table += "+----------------+--------------------------+```"
+        # --- OUTPUT LOGIC FOR LARGE GROUPS ---
+        await interaction.followup.send(f"### 📦 BALAGBAG Distribution: {len(players)} Members Found")
 
-        # --- FINAL OUTPUT ---
-        final_announcement = (
-            f"### 📦 Loot Distribution Summary\n"
-            f"{summary_table}\n\n"
+        # Split players into groups of 20 to avoid the 2000 character limit
+        for chunk in chunk_table(dist, chunk_size=20):
+            table = "```\n+----------------+--------------------------+\n"
+            table += "| Recipient      | Items                    |\n"
+            table += "+----------------+--------------------------+\n"
+            
+            for player, loot in chunk.items():
+                items_str = ", ".join(loot) if loot else "None"
+                p_disp = (player[:14] + "..") if len(player) > 14 else player
+                i_disp = (items_str[:22] + "...") if len(items_str) > 22 else items_str
+                table += f"| {p_disp:<14} | {i_disp:<24} |\n"
+            
+            table += "+----------------+--------------------------+```"
+            await interaction.followup.send(table)
+
+        # Final Notification
+        final_notice = (
             f"🔔 @everyone\n"
-            f"> **Official Notice:** The automated distribution process has been completed successfully. "
-            f"All recipients are formally requested to review the allocation above and update the system records."
+            f"> **Formal Notice:** Distribution for all {len(players)} members is complete. "
+            f"Please verify your allocated items in the tables above."
         )
-        
-        await interaction.followup.send(final_announcement)
+        await interaction.followup.send(final_notice)
 
     except Exception as e:
-        await interaction.followup.send(f"❌ Error processing CSV: {e}")
+        await interaction.followup.send(f"❌ Error: {e}")
 
-# --- STARTUP LOGIC ---
-TOKEN = os.getenv('DISCORD_TOKEN')
-
-if TOKEN:
-    bot.run(TOKEN)
-else:
-    print("❌ ERROR: 'DISCORD_TOKEN' not found.")
+bot.run(os.getenv('DISCORD_TOKEN'))
