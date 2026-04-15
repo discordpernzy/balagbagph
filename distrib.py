@@ -10,17 +10,18 @@ from collections import Counter
 # --- BOT SETUP ---
 intents = discord.Intents.default()
 intents.message_content = True 
+# Set to True if you enabled it in Portal, False if not. 
+# If Choice A from before, set to False.
 intents.members = True 
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 @bot.event
 async def on_ready():
-    print(f'BALAGBAG is online and open to everyone.')
+    print(f'BALAGBAG is online. Multi-drop enabled.')
     await bot.tree.sync()
 
-# We removed the @is_guild_staff check here
-@bot.tree.command(name="distribute", description="Loot distribution (Public Access)")
+@bot.tree.command(name="distribute", description="Allows one person to win multiple items")
 async def distribute(interaction: discord.Interaction, file: discord.Attachment):
     await interaction.response.defer()
 
@@ -45,21 +46,23 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
                     if item and count > 0: prize_rules.append((item, count))
                 except: pass
 
-        if not all_names or not prize_rules:
-            return await interaction.followup.send("❌ CSV Error: Check your formatting!")
+        if not all_names:
+            return await interaction.followup.send("❌ No names found in Column A!")
 
-        pool = all_names.copy()
         winners_dict = {}
 
+        # --- MULTI-DROP LOGIC ---
         for item, count in prize_rules:
-            if not pool: break
-            selected = random.sample(pool, min(len(pool), count))
-            for winner in selected:
-                if winner not in winners_dict: winners_dict[winner] = []
+            # We pick 'count' winners from the full list of names every time
+            # This allows one person to be picked for Item A and Item B
+            selected_winners = random.choices(all_names, k=count)
+            
+            for winner in selected_winners:
+                if winner not in winners_dict:
+                    winners_dict[winner] = []
                 winners_dict[winner].append(item)
-                pool.remove(winner)
 
-        # --- TABLE WITH ITEM STACKING ---
+        # --- TABLE WITH STACKING ---
         table = "### 📦 BALAGBAG Distribution Results\n"
         table += "```\n+----------------+-----------------------------------+\n"
         table += "| Winner         | Item Won                          |\n"
@@ -67,15 +70,17 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
         
         for player, items in winners_dict.items():
             counts = Counter(items)
+            # This turns ['Chest', 'Chest', 'Ring'] into "2x Chest, Ring"
             stacked_items = [f"{qty}x {name}" if qty > 1 else name for name, qty in counts.items()]
             item_str = ", ".join(stacked_items)
             
             p_disp = (player[:14] + "..") if len(player) > 14 else player
             i_disp = (item_str[:32] + "...") if len(item_str) > 32 else item_str
             table += f"| {p_disp:<14} | {i_disp:<33} |\n"
+        
         table += "+----------------+-----------------------------------+```\n"
 
-        # --- 30 RANDOM ANNOUNCEMENTS ---
+        # --- RANDOM MESSAGES (30x30) ---
         announcements = [
             "🎉 **Big wins today!** Your hard work is paying off. Keep participating!",
             "🏆 **Victory tastes sweet!** Let's maintain this energy and keep contributing!",
@@ -109,19 +114,18 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             "🔋 **Full energy!** Let's carry this hype into next week's events!"
         ]
 
-        # --- 30 RANDOM ROASTS ---
         roasts = [
             "As for **{u}**, your luck is garbage. Go cry in a corner. 🤡",
-            "**{u}**, the universe said 'No.' Lead loser among {n} people. 📉",
+            "**{u}**, the universe said 'No.' Imagine getting nothing. 📉",
             "**{u}**, delete the game. You're just a background character. 💀",
             "RNGesus hates **{u}** specifically. Luck dry as a desert. 🌵",
             "Imagine being **{u}** and getting nothing while everyone else eats. 🚮",
-            "{n} failed, but **{u}** failed the hardest. Better luck in the next life. ⚰️",
+            "**{u}** failed the roll the hardest. Better luck in the next life. ⚰️",
             "Winners celebrate while **{u}** reconsiders all life choices. 🧠",
             "If luck was a sport, **{u}** would be a gold medalist in losing. 🎪",
             "**{u}** is why we can't have nice things. Absolute clown. 🤷",
             "Extreme salt detected from **{u}**. Get this loser a tissue. 🧂",
-            "Loot successful for everyone except **{u}** and {n-1} nobodies. 👤",
+            "Loot successful for everyone except **{u}** and other nobodies. 👤",
             "**{u}** has the RNG of a wet paper towel. Truly impressive failure. 🧻",
             "We said 'Distribution,' but for **{u}**, we meant 'Disappointment.' 😞",
             "The bot was programmed to give **{u}** nothing. It was personal. 🤖",
@@ -135,7 +139,7 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             "If failure was currency, **{u}** would be the richest person here. 💸",
             "**{u}** is just in the guild to make the winners look better. 🪵",
             "Breaking: **{u}** officially has the worst RNG in server history. 📢",
-            "**{u}** and the other {n-1} losers are officially part of the 'No Loot' club. 🚫",
+            "**{u}** is officially part of the 'No Loot' club. 🚫",
             "I'd roast **{u}**, but their loot history is already a burnt wreck. 🔥",
             "**{u}** is a master of getting 'Better Luck Next Time' messages. ✉️",
             "Watching **{u}** lose is the best entertainment we've had all day. 🎭",
@@ -143,8 +147,12 @@ async def distribute(interaction: discord.Interaction, file: discord.Attachment)
             "Don't worry **{u}**, someone has to be at the bottom of the food chain. 🐟"
         ]
 
-        unlucky = random.choice(pool) if pool else "someone"
-        final_content = f"{table}\n{random.choice(announcements)}\n\n🔔 @everyone\n> {random.choice(roasts).format(u=unlucky, n=len(pool))}"
+        # Identify losers (names in Column A that didn't win anything)
+        all_winners = set(winners_dict.keys())
+        losers = [n for n in all_names if n not in all_winners]
+        unlucky = random.choice(losers) if losers else "the RNG"
+
+        final_content = f"{table}\n{random.choice(announcements)}\n\n🔔 @everyone\n> {random.choice(roasts).format(u=unlucky)}"
         await interaction.followup.send(final_content)
 
     except Exception as e:
